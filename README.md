@@ -1,5 +1,4 @@
 # DatasetGen
-===================
 This repository contains the hex-mesh dataset generation software developed as part of the publication
 
 Evaluating Hex-mesh Quality Metrics via Correlation Analysis
