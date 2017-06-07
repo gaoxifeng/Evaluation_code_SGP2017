@@ -7,7 +7,7 @@ Xifeng Gao, Jin Huang, Kaoji Xu, Zherong Pan, Zhigang Deng, Guoning Chen
 
 In Symposium on Geometry Processing (SGP 2017)
 
-**Paper | Supplemental material | Dataset **: TBD
+**Paper | Supplemental material | Dataset :** TBD
 
 # Compiling
 
