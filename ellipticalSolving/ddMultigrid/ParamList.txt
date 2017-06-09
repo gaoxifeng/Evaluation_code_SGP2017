@@ -1,0 +1,40 @@
+//knot
+2 ./knot/hex.vtk ./knot/hexS.vtk
+2 ./knot/hexS.vtk ./knot/hexSS.vtk
+1 ./knot/hexSS.vtk ./hexSSSmooth.vtk mesh,nrLaplacian,20 mesh,dtLaplacian,0.6
+0 ./knot/hexSSSmooth.vtk mesh,geomCoarsenAlgor,2
+
+//bunny
+0 ./bunny/hex.vtk mesh,geomCoarsenAlgor,2
+
+//sphere
+3 4 32
+1 ./sphere/hex.vtk ./sphere/hexSmooth.vtk mesh,nrLaplacian,1 mesh,ARAPInteriorSmooth,false
+0 ./sphere/hexSmooth.vtk mesh,geomCoarsenAlgor,2
+
+//bumpy torus
+0 ./bumpyTorus/hex.vtk mesh,geomCoarsenAlgor,2
+
+//buste
+0 ./buste/hex.vtk mesh,geomCoarsenAlgor,2
+
+//dancing
+0 ./dancing/hex.vtk mesh,geomCoarsenAlgor,2
+
+//dragon
+0 ./dragon/hex.vtk mesh,geomCoarsenAlgor,2
+
+//elephant
+0 ./elephant/hex.vtk mesh,geomCoarsenAlgor,2
+
+//gargoyle
+0 ./gargoyle/hex.vtk mesh,geomCoarsenAlgor,2
+
+//fertility
+0 ./fertility/hex.vtk mesh,geomCoarsenAlgor,2
+
+//kiss
+0 ./kiss/hex.vtk mesh,geomCoarsenAlgor,2
+
+//kitty
+0 ./kitty/hex.vtk mesh,geomCoarsenAlgor,2

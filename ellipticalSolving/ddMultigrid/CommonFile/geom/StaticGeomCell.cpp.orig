@@ -1,0 +1,469 @@
+#include "StaticGeomCell.h"
+#include "../ImplicitFunc.h"
+#include "../MakeMesh.h"
+
+USE_PRJ_NAMESPACE
+
+BoxGeomCell::BoxGeomCell():StaticGeomCell(0) {}
+BoxGeomCell::BoxGeomCell(const Mat4& T,sizeType dim,const Vec3& ext,scalar depth,bool insideOut)
+	:StaticGeomCell(T,dim,0),_ext(ext),_depth(depth),_insideOut(insideOut)
+{
+	build();
+}
+bool BoxGeomCell::read(std::istream& is)
+{
+	StaticGeomCell::read(is);
+	readBinaryData(_ext,is);
+	readBinaryData(_depth,is);
+	readBinaryData(_insideOut,is);
+	return is.good();
+}
+bool BoxGeomCell::write(std::ostream& os) const
+{
+	StaticGeomCell::write(os);
+	writeBinaryData(_ext,os);
+	writeBinaryData(_depth,os);
+	writeBinaryData(_insideOut,os);
+	return os.good();
+}
+boost::shared_ptr<Serializable> BoxGeomCell::copy() const
+{
+	return boost::shared_ptr<Serializable>(new BoxGeomCell(*this));
+}
+void BoxGeomCell::getMeshInner(ObjMeshTpl<scalar>& mesh) const
+{
+	if(_dim == 2)MakeMesh::makeBox2D(mesh,_ext);
+	else MakeMesh::makeBox3D(mesh,_ext);
+	if(_insideOut)mesh.insideOut();
+}
+BBox<scalar> BoxGeomCell::getBBInner() const
+{
+	Vec3 depth=Vec3::Zero();
+	depth.block(0,0,_dim,1).setConstant(_depth);
+	return BBox<scalar>(-_ext-depth,_ext+depth);
+}
+bool BoxGeomCell::distInner(const Vec3& pt,Vec3& n) const
+{
+	BBox<scalar> box(-_ext,_ext);
+	if(box.contain(pt,_dim)^_insideOut) {
+		closestInner(pt,n);
+		return true;
+	} else return false;
+}
+bool BoxGeomCell::closestInner(const Vec3& pt,Vec3& n) const
+{
+	BBox<scalar> box(-_ext,_ext);
+	if(box.contain(pt,_dim)) {
+		scalar minDist=ScalarUtil<scalar>::scalar_max,dist;
+		for(sizeType d=0; d<_dim; d++) {
+			dist=_ext[d]+pt[d];
+			if(dist < minDist) {
+				minDist=dist;
+				n=-Vec3::Unit(d)*dist;
+			}
+			dist=_ext[d]-pt[d];
+			if(dist < minDist) {
+				minDist=dist;
+				n=Vec3::Unit(d)*dist;
+			}
+		}
+		return true;
+	} else {
+		n=box.closestTo(pt,_dim)-pt;
+		return false;
+	}
+}
+scalar BoxGeomCell::rayQueryInner(const Vec3& x0,const Vec3& dir) const
+{
+	scalar s,t;
+	BBox<scalar> bb=getBBInner();
+	if(bb.intersect(x0,x0+dir,s,t,_dim))
+		return s;
+	else return 1;
+}
+
+SphereGeomCell::SphereGeomCell():StaticGeomCell(1) {}
+SphereGeomCell::SphereGeomCell(const Mat4& T,sizeType dim,scalar rad,scalar depth,bool insideOut)
+	:StaticGeomCell(T,dim,1),_rad(rad),_depth(depth),_insideOut(insideOut)
+{
+	build();
+}
+bool SphereGeomCell::read(std::istream& is)
+{
+	StaticGeomCell::read(is);
+	readBinaryData(_rad,is);
+	return is.good();
+}
+bool SphereGeomCell::write(std::ostream& os) const
+{
+	StaticGeomCell::write(os);
+	writeBinaryData(_rad,os);
+	return os.good();
+}
+boost::shared_ptr<Serializable> SphereGeomCell::copy() const
+{
+	return boost::shared_ptr<Serializable>(new SphereGeomCell(*this));
+}
+void SphereGeomCell::getMeshInner(ObjMeshTpl<scalar>& mesh) const
+{
+	if(_dim == 2)MakeMesh::makeSphere2D(mesh,_rad,16);
+	else MakeMesh::makeSphere3D(mesh,_rad,16);
+}
+BBox<scalar> SphereGeomCell::getBBInner() const
+{
+	Vec3 rad=Vec3::Zero();
+	rad.block(0,0,_dim,1).setConstant(_rad+_depth);
+	return BBox<scalar>(-rad,rad);
+}
+bool SphereGeomCell::distInner(const Vec3& pt,Vec3& n) const
+{
+	scalar len=pt.norm();
+	if((len <= _rad) ^ _insideOut) {
+		closestInner(pt,n);
+		return true;
+	} else return false;
+}
+bool SphereGeomCell::closestInner(const Vec3& pt,Vec3& n) const
+{
+	scalar len=pt.norm();
+	n=pt*(_rad-len)/std::max<scalar>(len,1E-6f);
+	return len < _rad;
+}
+scalar SphereGeomCell::rayQueryInner(const Vec3& x0,const Vec3& dir) const
+{
+	//solve ||x0+s*dir|| == _rad
+	scalar a=dir.squaredNorm();
+	scalar b=dir.dot(x0)*2;
+	scalar c=x0.squaredNorm()-_rad*_rad;
+	scalar delta=b*b-4*a*c;
+	if(delta <= 0)
+		return 1;
+	else {
+		scalar s0=(-b-sqrt(delta))/(2*a);
+		scalar s1=(-b+sqrt(delta))/(2*a);
+		if(s0 > 0 && s0 < 1)
+			return s0;
+		else if(s1 > 0 && s1 < 1)
+			return s1;
+		else return 1;
+	}
+}
+
+CylinderGeomCell::CylinderGeomCell():StaticGeomCell(2) {}
+CylinderGeomCell::CylinderGeomCell(const Mat4& T,sizeType dim,scalar rad,scalar y)
+	:StaticGeomCell(T,dim,2),_rad(rad),_y(y)
+{
+	build();
+}
+bool CylinderGeomCell::read(std::istream& is)
+{
+	StaticGeomCell::read(is);
+	readBinaryData(_rad,is);
+	readBinaryData(_y,is);
+	return is.good();
+}
+bool CylinderGeomCell::write(std::ostream& os) const
+{
+	StaticGeomCell::write(os);
+	writeBinaryData(_rad,os);
+	writeBinaryData(_y,os);
+	return os.good();
+}
+boost::shared_ptr<Serializable> CylinderGeomCell::copy() const
+{
+	return boost::shared_ptr<Serializable>(new CylinderGeomCell(*this));
+}
+CylinderGeomCell::CylinderGeomCell(const Mat4& T,sizeType dim,sizeType type):StaticGeomCell(T,dim,type) {}
+void CylinderGeomCell::getMeshInner(ObjMeshTpl<scalar>& mesh) const
+{
+	MakeMesh::makeCylinder3D(mesh,_rad,_y,16,16);
+}
+BBox<scalar> CylinderGeomCell::getBBInner() const
+{
+	Vec3 cor(_rad,_y,_rad);
+	if(_dim == 2)cor[2]=0.0f;
+	return BBox<scalar>(-cor,cor);
+}
+bool CylinderGeomCell::distInner(const Vec3& pt,Vec3& n) const
+{
+	scalar len=Vec3(pt[0],0.0f,pt[2]).norm();
+	//boundary
+	scalar dist=_rad-len;
+	if(dist < 0.0f)return false;
+	n=Vec3(pt[0],0.0f,pt[2])*dist/std::max<scalar>(len,1E-6f);
+	//bottom
+	scalar dist2=_y+pt[1];
+	if(dist2 < 0.0f)return false;
+	if(dist2 < dist) {
+		dist=dist2;
+		n=-Vec3::Unit(1)*dist2;
+	}
+	//top
+	scalar dist3=_y-pt[1];
+	if(dist3 < 0.0f)return false;
+	if(dist3 < dist) {
+		dist=dist3;
+		n=Vec3::Unit(1)*dist3;
+	}
+	return true;
+}
+scalar CylinderGeomCell::rayQueryInner(const Vec3& x0,const Vec3& dir) const
+{
+	//solve ||x0+s*dir|| == _rad
+	scalar a=Vec2(dir[0],dir[2]).squaredNorm();
+	scalar b=Vec2(dir[0],dir[2]).dot(Vec2(x0[0],x0[2]))*2;
+	scalar c=Vec2(x0[0],x0[2]).squaredNorm()-_rad*_rad;
+
+	scalar s0=0,s1=1;
+	scalar delta=b*b-4*a*c;
+	if(a < EPS || delta <= 0) {
+		if(c >= 0)
+			return 1;
+	} else {
+		s0=max<scalar>((-b-sqrt(delta))/(2*a),0);
+		s1=min<scalar>((-b+sqrt(delta))/(2*a),1);
+		if(s0 >= s1)
+			return 1;
+	}
+
+	scalar y0=x0[1]+dir[1]*s0;
+	scalar y1=x0[1]+dir[1]*s1;
+	if(y0 > _y) {
+		if(y1 >= _y)
+			return 1;
+		return (_y-x0[1])/dir[1];
+	} else if(y0 < -_y) {
+		if(y1 <= -_y)
+			return 1;
+		return (-_y-x0[1])/dir[1];
+	} else return s0;
+}
+
+CapsuleGeomCell::CapsuleGeomCell():CylinderGeomCell(Mat4::Identity(),3,3) {}
+CapsuleGeomCell::CapsuleGeomCell(const Mat4& T,sizeType dim,scalar rad,scalar y)
+	:CylinderGeomCell(T,dim,3)
+{
+	_rad=rad;
+	_y=y;
+	build();
+}
+boost::shared_ptr<Serializable> CapsuleGeomCell::copy() const
+{
+	return boost::shared_ptr<Serializable>(new CapsuleGeomCell(*this));
+}
+void CapsuleGeomCell::getMeshInner(ObjMeshTpl<scalar>& mesh) const
+{
+	if(_dim == 3)
+		MakeMesh::makeCapsule3D(mesh,_rad,_y,16);
+	else MakeMesh::makeCapsule2D(mesh,_rad,_y,16);
+}
+BBox<scalar> CapsuleGeomCell::getBBInner() const
+{
+	Vec3 cor(_rad,_y+_rad,_rad);
+	if(_dim == 2)cor[2]=0.0f;
+	return BBox<scalar>(-cor,cor);
+}
+bool CapsuleGeomCell::distInner(const Vec3& pt,Vec3& n) const
+{
+	n=pt;
+	if(!(n[1] >= _y || n[1] <= -_y))
+		n[1]=0.0f;
+	else if(n[1] >= _y)
+		n-=Vec3::Unit(1)*_y;
+	else n+=Vec3::Unit(1)*_y;
+
+	scalar norm=std::max<scalar>(EPS,n.norm());
+	if(norm > _rad)
+		return false;
+	n*=((_rad-norm)/norm);
+	return true;
+}
+scalar CapsuleGeomCell::rayQueryInner(const Vec3& x0,const Vec3& dir) const
+{
+	SphereGeomCell c(Mat4::Identity(),_dim,_rad);
+	scalar s0=CylinderGeomCell::rayQueryInner(x0,dir);
+	scalar s1=c.rayQueryInner(x0-Vec3::Unit(1)*_y,dir);
+	scalar s2=c.rayQueryInner(x0+Vec3::Unit(1)*_y,dir);
+	return std::min(s0,std::min(s1,s2));
+}
+
+struct LineCallback {
+	LineCallback(const std::vector<Vec3,Eigen::aligned_allocator<Vec3> >& vss,
+	             const std::vector<Vec3i,Eigen::aligned_allocator<Vec3i> >& iss,
+	             const LineSeg& l,sizeType dim):_vss(vss),_iss(iss),_l(l),_dim(dim),_s(1) {}
+	bool validNode(const Node<sizeType>& node) {
+		return node._bb.intersect(_l._x,_l._y,_dim);
+	}
+	void updateDist(const Node<sizeType>& node) {
+		scalar s;
+		const Vec3i& iss=_iss[node._cell];
+		if(_dim == 3) {
+			Triangle t(_vss[iss[0]],_vss[iss[1]],_vss[iss[2]]);
+			if(t.intersect(_l,s) && s < _s)
+				_s=s;
+		} else {
+			LineSeg l(_vss[iss[0]],_vss[iss[1]]);
+			if(l.intersect(_l,s) && s < _s)
+				_s=s;
+		}
+	}
+	const std::vector<Vec3,Eigen::aligned_allocator<Vec3> >& _vss;
+	const std::vector<Vec3i,Eigen::aligned_allocator<Vec3i> >& _iss;
+	LineSeg _l;
+	sizeType _dim;
+	scalar _s;
+};
+ObjMeshGeomCell::ObjMeshGeomCell()
+	:StaticGeomCell(4),_insideOut(false),_depth(0.0f) {}
+ObjMeshGeomCell::ObjMeshGeomCell(const Mat4& trans,const ObjMeshTpl<scalar>& mesh,scalar depth,bool insideOut)
+	:StaticGeomCell(trans,mesh.getDim(),4),_insideOut(insideOut),_depth(depth)
+{
+	_vss=mesh.getV();
+	_iss=mesh.getI();
+	build();
+	// writeBVHByLevel<sizeType>(_bvh,-1);
+	if(_depth == 0.0f)
+		_depth=mesh.getBB().getExtent().maxCoeff()*0.1f;
+}
+bool ObjMeshGeomCell::read(std::istream& is)
+{
+	StaticGeomCell::read(is);
+	_grid.read(is);
+	readBinaryData(_depth,is);
+	readBinaryData(_insideOut,is);
+	return is.good();
+}
+bool ObjMeshGeomCell::write(std::ostream& os) const
+{
+	StaticGeomCell::write(os);
+	_grid.write(os);
+	writeBinaryData(_depth,os);
+	writeBinaryData(_insideOut,os);
+	return os.good();
+}
+boost::shared_ptr<Serializable> ObjMeshGeomCell::copy() const
+{
+	return boost::shared_ptr<Serializable>(new ObjMeshGeomCell(*this));
+}
+scalar ObjMeshGeomCell::depth() const
+{
+	return _depth;
+}
+void ObjMeshGeomCell::updateDist(const Node<sizeType>& node,const Vec3& pt,Vec3& cp,Vec3& n,scalar& dist,scalar* minDist) const
+{
+	if(_dim == 2)calcMinDist2D(_iss[node._cell],pt,cp,n,dist,minDist);
+	else calcMinDist3D(_iss[node._cell],pt,cp,n,dist,minDist);
+}
+void ObjMeshGeomCell::buildLevelSet(scalar cellSz,scalar off)
+{
+	ImplicitFuncOffset offset;
+	offset._off-=off;
+	offset._inner.reset(new ImplicitFuncMeshRef(*this));
+	_grid=ImplicitFuncReinit(cellSz,offset)._ls;
+	_grid.add(off);
+	//GridOp<scalar,scalar>::write3DScalarGridVTK("./levelset.vtk",_grid);
+}
+scalar ObjMeshGeomCell::distLevelSet(const Vec3& pos) const
+{
+	return _grid.sampleSafe(transformHomo<scalar>(_invT,pos));
+}
+void ObjMeshGeomCell::getMeshInner(ObjMeshTpl<scalar>& mesh) const
+{
+	mesh.getV()=_vss;
+	mesh.getI()=_iss;
+	mesh.setDim((int)_dim);
+	mesh.smooth();
+}
+BBox<scalar> ObjMeshGeomCell::getBBInner() const
+{
+	if(!_grid.data().empty())
+		return _grid.getBB();
+	BBox<scalar> bb=_bvh.back()._bb;
+	if(_insideOut)
+		return bb.enlarge(_depth,_dim);
+	else return bb;
+}
+bool ObjMeshGeomCell::distInner(const Vec3& pt,Vec3& n) const
+{
+	if(!_grid.data().empty()) {
+		scalar phi=_grid.sampleSafe(pt);
+		if(phi > 0)
+			return false;
+		else {
+			n=-_grid.sampleSafeGrad(pt).normalized()*phi;
+			return true;
+		}
+	}
+
+	Vec3 cp;
+	scalar dist=ScalarUtil<scalar>::scalar_max,minDist=dist;
+	BVHQuery<sizeType>(_bvh,_dim,-1).pointDistQuery(pt,*this,cp,n,dist,&minDist);
+	cp-=pt;
+	if(_insideOut)
+		n*=-1.0f;
+	if(cp.dot(n) < 1E-6f)
+		return false;
+	n=cp;
+	return dist < ScalarUtil<scalar>::scalar_max;
+}
+bool ObjMeshGeomCell::closestInner(const Vec3& pt,Vec3& n) const
+{
+	if(!_grid.data().empty()) {
+		scalar phi=_grid.sampleSafe(pt);
+		n=-_grid.sampleSafeGrad(pt).normalized()*phi;
+		return phi < 0;
+	}
+
+	Vec3 cp,nor;
+	scalar dist=ScalarUtil<scalar>::scalar_max,minDist=dist;
+	cp.block(0,0,_dim,1).setConstant(dist);
+
+	BVHQuery<sizeType>(_bvh,_dim,-1).pointDistQuery(pt,*this,cp,nor,dist,&minDist);
+	n=cp-pt;
+
+	if(dist < _depth) {
+		n*=minDist/max<scalar>(n.norm(),EPS);
+		return n.dot(nor) > 0.0f;
+	} else {
+		n.block(0,0,_dim,1).setConstant(_depth);
+		if(minDist < _depth)
+			n*=minDist/max<scalar>(n.norm(),EPS);
+		return false;
+	}
+}
+scalar ObjMeshGeomCell::rayQueryInner(const Vec3& x0,const Vec3& dir) const
+{
+	LineCallback cb(_vss,_iss,LineSeg(x0,x0+dir),_dim);
+	BVHQuery<sizeType>(_bvh,_dim,-1).pointQuery(cb);
+	return cb._s;
+}
+void ObjMeshGeomCell::calcMinDist2D(const Vec3i& I,const Vec3& pt,Vec3& cp,Vec3& n,scalar& dist,scalar* minDist) const
+{
+	Vec3 cpTmp,b;
+	scalar distNew;
+	LineSegTpl<scalar> l(_vss[I[0]],_vss[I[1]]);
+
+	l.calcPointDist(pt,distNew,cpTmp,b);
+	distNew=sqrt(distNew);
+	*minDist=min(*minDist,distNew);
+	if(distNew < dist && abs((pt-cpTmp).dot(l.normal())) > 1E-3f*distNew) {
+		cp=cpTmp;
+		dist=distNew;
+		n=l.normal();
+	}
+}
+void ObjMeshGeomCell::calcMinDist3D(const Vec3i& I,const Vec3& pt,Vec3& cp,Vec3& n,scalar& dist,scalar* minDist) const
+{
+	Vec3 cpTmp,b;
+	scalar distNew;
+	Triangle t(_vss[I[0]],_vss[I[1]],_vss[I[2]]);
+
+	t.calcPointDist(pt,distNew,cpTmp,b);
+	distNew=sqrt(distNew);
+	*minDist=min(*minDist,distNew);
+	if(distNew < dist && abs((pt-cpTmp).dot(t.normal())) > 1E-3f*distNew) {
+		cp=cpTmp;
+		dist=distNew;
+		n=t.normal();
+	}
+}

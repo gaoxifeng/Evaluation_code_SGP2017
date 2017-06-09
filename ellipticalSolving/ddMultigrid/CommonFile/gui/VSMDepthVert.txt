@@ -1,0 +1,8 @@
+varying vec3 v;
+
+void main()
+{
+	gl_Position=ftransform();
+	v=vec3(gl_ModelViewMatrix*gl_Vertex);
+	gl_TexCoord[0]=gl_MultiTexCoord0;
+}

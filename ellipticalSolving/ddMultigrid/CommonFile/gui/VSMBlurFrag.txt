@@ -1,0 +1,33 @@
+#define NR_BLUR_MAX 20
+#define INF 1000000
+
+uniform sampler2D motions;
+uniform vec2 scaleU;
+
+uniform float offB[NR_BLUR_MAX];
+uniform float coefB[NR_BLUR_MAX];
+uniform int nrB;
+
+void main()
+{
+	float weight=0.0;
+	vec4 color=vec4(0.0);
+	for(int i=0;i<nrB;i++)
+	{
+		vec2 tc=gl_TexCoord[0].xy+scaleU*offB[i];
+		if(tc.x <= 0.0 || tc.x >= 1.0 || tc.y <= 0.0 || tc.y >= 1.0)
+		{
+			gl_FragColor=vec4(INF);
+			return;
+		}
+		vec4 t=texture2D(motions,tc);
+		if(t.x > 0.0 && t.y > 0.0)
+		{
+			weight+=coefB[i];
+			color+=t*coefB[i];
+		}
+	}
+	if(weight > 0.0)
+		gl_FragColor=color/weight;
+	else gl_FragColor=vec4(INF);
+}
